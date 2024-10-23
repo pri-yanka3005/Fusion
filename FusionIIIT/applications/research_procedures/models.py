@@ -3,6 +3,8 @@ from django.db import models
 from applications.globals.models import *
 from django.contrib.auth.models import User
 import datetime
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 
 class Constants:
     RESPONSE_TYPE = (
@@ -12,113 +14,191 @@ class Constants:
     )
 
 
-class projects(models.Model):       
-    project_id= models.IntegerField(primary_key= True)
-    project_name= models.CharField(max_length=600)
-    project_type= models.CharField(max_length=500)
-    # financial_outlay= models.IntegerField()
-    project_investigator_id=models.ForeignKey(User,related_name='pi_id', on_delete=models.CASCADE)
-    # rspc_admin_id=models.CharField(max_length=500)
-    co_project_investigator_id=models.ForeignKey(User,related_name='copi_id' ,on_delete=models.CASCADE, null=True)
+
+class projects(models.Model): 
+    PROJECT_TYPES = (
+        ('Research', 'Research'),
+        ('Product', 'Product'),
+        ('Consultancy', 'Consultancy'),
+    )   
+
+    CATEGORY_CHOICES = (
+        ('Government', 'Governement'),
+        ('Private', 'Private Entity'),
+        ('IIITDMJ', 'Institute'),
+        ('Other', 'Other'),
+    )
+
+    STATUS_CHOICES = (
+        ('OnGoing', 'OnGoing'),
+        ('Terminated', 'Terminated'),
+        ('Completed', 'Completed'),
+    )      
+
+    DEPT_CHOICES = [
+        ('CSE', 'Computer Science and Engineering'),
+        ('ECE', 'Electronics and Communication Engineering'),
+        ('ME', 'Mechanical Engineering'),
+        ('SM', 'School of Management'),
+        ('Des', 'Design'),
+        ('NS', 'Natural Sciences'),
+        ('LA', 'Liberal Arts'),
+        ('none', 'None Of The Above'),
+    ]
+
+    pid = models.AutoField(primary_key=True)
+    name= models.CharField(max_length=600)
+    type= models.CharField(max_length=50, choices=PROJECT_TYPES)
+    pi_name=models.CharField(max_length=150)
+    pi_id=models.CharField(max_length=150)
     sponsored_agency= models.CharField(max_length=500)
+    dept=models.CharField(max_length=50, choices=DEPT_CHOICES)
     start_date=models.DateField()
-    submission_date=models.DateField()
-    finish_date=models.DateField()
-    years= models.IntegerField()
-    status= models.IntegerField(default=0)
-    project_info_file=models.FileField( null=True, blank=True)  
-    # project_description=models.CharField(max_length=500 ,default="description")
-    financial_outlay_status=models.IntegerField(default=0)
+    deadline=models.DateField()
+    finish_date=models.DateField(null=True, blank=True)
+    status= models.CharField(max_length=50, choices=STATUS_CHOICES)
+    file=models.FileField( null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
+    total_budget=models.IntegerField(default=0)
+    rem_budget=models.IntegerField(default=0)
+    category=models.CharField(max_length=50, choices=CATEGORY_CHOICES)
     
 
     def __str__(self):
-        return str(self.project_id)
+        return str(self.pid)
 
     class Meta:
-        ordering = ['-project_id']
+        ordering = ['-pid']
 
-class financial_outlay(models.Model):
-    financial_outlay_id= models.IntegerField(primary_key=True)
-    project_id= models.ForeignKey(projects, on_delete=models.CASCADE)
-    category=models.CharField(max_length=500)
-    sub_category=models.CharField(max_length=500)
-    amount=models.IntegerField()
-    year=models.IntegerField()
-    status= models.IntegerField(default=0)
-    staff_limit=models.IntegerField(default=0)
-    utilized_amount=models.IntegerField(default=0,null= True)
+
+class expenditure(models.Model):
+    EXPENDITURE_TYPES = (
+        ('Tangible', 'Physical Item'),
+        ('Non-tangible', 'Non-tangible Resource'),
+    )
+    APPROVAL_CHOICES = (
+        ('Approved', 'Approved'),
+        ('Rejected', 'Rejected'),
+        ('Pending' , 'Pending')
+    )
+    id = models.AutoField(primary_key=True)
+    pid=models.ForeignKey(projects, on_delete=models.CASCADE)
+    exptype = models.CharField(max_length=50, choices=EXPENDITURE_TYPES)
+    item = models.CharField(max_length=300)
+    cost = models.DecimalField(max_digits=10, decimal_places=2)
+    lastdate = models.DateField(null=True, blank=True)
+    mode = models.CharField(max_length=50)
+    inventory = models.CharField(max_length=50)
+    desc = models.TextField(null=True, blank=True)
+    file = models.FileField(upload_to='uploads/', null=True, blank=True)
+    approval= models.CharField(max_length=50, choices=APPROVAL_CHOICES)
+
+    def clean(self):
+        if self.cost <= 0:
+            raise ValidationError('Estimated cost must be greater than zero')
+
+        if self.lastdate != '' and self.lastdate < datetime.datetime.now().date():
+            raise ValidationError('Last date must not be a past date')
+        
+    def __str__(self):
+        return f"{self.item} ({self.exptype})"
+
+class staff(models.Model):
+    DESIGNATION_CHOICES = [
+        ('Co-Project Investigator', 'Co-Project Investigator'),
+        ('Research Scholar', 'Research Scholar'),
+        ('Research Assistant', 'Research Assistant'),
+        ('Supporting Staff', 'Supporting Staff'),
+        ('Student Intern', 'Student Intern'),
+    ]
+
+    QUALIFICATION_CHOICES = [
+        ('MTech', 'MTech Student'),
+        ('PhD', 'PhD Student'),
+        ('Professor', 'Teaching Faculty'),
+        ('Other', 'Other Supporting Staff'),
+    ]
+
+    DEPT_CHOICES = [
+        ('CSE', 'Computer Science and Engineering'),
+        ('ECE', 'Electronics and Communication Engineering'),
+        ('ME', 'Mechanical Engineering'),
+        ('SM', 'School of Management'),
+        ('Des', 'Design'),
+        ('NS', 'Natural Sciences'),
+        ('LA', 'Liberal Arts'),
+        ('none', 'None Of The Above'),
+    ]
+
+    APPROVAL_CHOICES = [
+        ('Approved', 'Approved'),
+        ('Rejected', 'Rejected'),
+        ('Pending' , 'Pending')
+    ]
+
+    id = models.AutoField(primary_key=True)
+    pid=models.ForeignKey(projects, on_delete=models.CASCADE)
+    person = models.CharField(max_length=300)
+    uname = models.CharField(max_length=150)
+    dept = models.CharField(max_length=50, choices=DEPT_CHOICES)
+    qualification = models.CharField(max_length=50, choices=QUALIFICATION_CHOICES)
+    designation = models.CharField(max_length=50, choices=DESIGNATION_CHOICES)
+    stipend = models.DecimalField(max_digits=10, decimal_places=2)
+    startdate = models.DateField(null=True, blank=True)
+    lastdate = models.DateField(null=True, blank=True)
+    description = models.TextField(blank=True,  null=True)
+    file = models.FileField(upload_to='staff_profiles/', blank=True, null=True)
+    approval= models.CharField(max_length=50, choices=APPROVAL_CHOICES) 
+
+    def clean(self):
+        if self.deadline <= self.startdate:
+            raise ValidationError('End date must be after the start date.')
+        if self.stipend < 0:
+            raise ValidationError('Stipend must be atleast zero')
 
     def __str__(self):
-        return str(self.financial_outlay_id)
-
-    class Meta:
-        ordering = ['-financial_outlay_id']
-
-
-class category(models.Model):
-    category_id= models.IntegerField(primary_key=True)
-    category_name= models.CharField(max_length=500)
-    sub_category_name= models.CharField(max_length=500)
-
-
-    def __str__(self):
-        return str(self.category_id)
-
-    class Meta:
-        ordering = ['-category_id']
-
-
-class staff_allocations(models.Model):
-    staff_allocation_id=models.IntegerField(primary_key=True)
-    project_id= models.ForeignKey(projects, on_delete=models.CASCADE)
-    staff_id=models.ForeignKey(User, on_delete=models.CASCADE)
-    staff_name=models.CharField(max_length=500)
-    qualification=models.CharField(max_length=500)
-    year=models.IntegerField()
-    stipend=models.IntegerField()
-    staff_type=models.CharField(max_length=100,default="research")
-    start_date=models.DateField(default=datetime.date.today)
-    end_date=models.DateField(null=True, blank=True)
-    
-    def __str__(self):
-        return str(self.staff_allocation_id)
-
-    
-
-    class Meta:
-        ordering = ['-staff_allocation_id']
-
-class co_pis(models.Model):
-    co_pi= models.ForeignKey(User, on_delete=models.CASCADE)
-    project_id= models.ForeignKey(projects, on_delete=models.CASCADE)
-
-    class Meta:
-        ordering = ['-project_id']
+        return f"{self.person} ({self.uname}) - {self.designation}"
 
     
 
 class requests(models.Model):
-    request_id=models.IntegerField(primary_key=True)
-    project_id= models.ForeignKey(projects, on_delete=models.CASCADE)
-    request_type=models.CharField(max_length=500)
-    project_investigator_id=models.ForeignKey(User, related_name='rj_pi'  , on_delete= models.CASCADE)
-    approval_status= models.IntegerField(default=0) #value 0 means pending
+    APPROVAL_CHOICES = [
+    ('Approved', 'Approved'),
+    ('Rejected', 'Rejected'),
+    ('Pending' , 'Pending')
+    ]
+    REQUEST_TYPES = [
+    ('Expenditure', 'Expenditure'),
+    ('Staff', 'Staff'),
+    ]
+    id=models.AutoField(primary_key=True)
+    pid= models.ForeignKey(projects, on_delete=models.CASCADE)
+    file_id=models.IntegerField()  
+    request_type=models.CharField(max_length=50, choices=REQUEST_TYPES)
+    rid=models.IntegerField()
+    subject=models.CharField(max_length=300)
+    requestor=models.CharField(max_length=150)
+    holder=models.CharField(max_length=150)
+    approval= models.CharField(max_length=50, choices=APPROVAL_CHOICES) 
 
     def __str__(self):
-        return str(self.request_id)
+        return f"{self.pid} ({self.request_type}) - {self.rid}"
 
     class Meta:
-        ordering = ['-request_id']
+        ordering = ['-id']
+
+
     
-class co_project_investigator(models.Model):
-    co_pi_id= models.ForeignKey(User, on_delete=models.CASCADE)
-    project_id= models.ForeignKey(projects, on_delete=models.CASCADE)
+class project_access(models.Model):
+    id=models.AutoField(primary_key=True)
+    lead_id= models.CharField(max_length=150)
+    pid= models.ForeignKey(projects, on_delete=models.CASCADE)
 
     def __str__(self):
-        return str(self.co_pi_id)
+        return str(self.lead_id)
     
     class Meta:
-        ordering = ['-co_pi_id']
+        ordering = ['-lead_id']
     
     
     

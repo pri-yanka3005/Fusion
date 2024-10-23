@@ -283,4 +283,12 @@ YOUTUBE_DATA_API_KEY = 'api_key'
 
 
 CORS_ORIGIN_ALLOW_ALL = True
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:5173',  # Frontend address
+]
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:5173',  # React frontend running on this origin
+    'http://127.0.0.1:5173',
+]
+CORS_ALLOW_CREDENTIALS = True
 ALLOW_PASS_RESET = True
