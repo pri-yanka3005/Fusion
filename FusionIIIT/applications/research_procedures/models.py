@@ -82,6 +82,7 @@ class expenditure(models.Model):
         ('Pending' , 'Pending')
     )
     id = models.AutoField(primary_key=True)
+    file_id=models.IntegerField()
     pid=models.ForeignKey(projects, on_delete=models.CASCADE)
     exptype = models.CharField(max_length=50, choices=EXPENDITURE_TYPES)
     item = models.CharField(max_length=300)
@@ -137,6 +138,7 @@ class staff(models.Model):
     ]
 
     id = models.AutoField(primary_key=True)
+    file_id=models.IntegerField()
     pid=models.ForeignKey(projects, on_delete=models.CASCADE)
     person = models.CharField(max_length=300)
     uname = models.CharField(max_length=150)
@@ -146,7 +148,7 @@ class staff(models.Model):
     stipend = models.DecimalField(max_digits=10, decimal_places=2)
     startdate = models.DateField(null=True, blank=True)
     lastdate = models.DateField(null=True, blank=True)
-    description = models.TextField(blank=True,  null=True)
+    desc = models.TextField(blank=True,  null=True)
     file = models.FileField(upload_to='staff_profiles/', blank=True, null=True)
     approval= models.CharField(max_length=50, choices=APPROVAL_CHOICES) 
 
@@ -161,30 +163,30 @@ class staff(models.Model):
 
     
 
-class requests(models.Model):
-    APPROVAL_CHOICES = [
-    ('Approved', 'Approved'),
-    ('Rejected', 'Rejected'),
-    ('Pending' , 'Pending')
-    ]
-    REQUEST_TYPES = [
-    ('Expenditure', 'Expenditure'),
-    ('Staff', 'Staff'),
-    ]
-    id=models.AutoField(primary_key=True)
-    pid= models.ForeignKey(projects, on_delete=models.CASCADE)
-    file_id=models.IntegerField()  
-    request_type=models.CharField(max_length=50, choices=REQUEST_TYPES)
-    rid=models.IntegerField()
-    subject=models.CharField(max_length=300)
-    requestor=models.CharField(max_length=150)
-    holder=models.CharField(max_length=150)
-    approval= models.CharField(max_length=50, choices=APPROVAL_CHOICES) 
+# class requests(models.Model):
+#     APPROVAL_CHOICES = [
+#     ('Approved', 'Approved'),
+#     ('Rejected', 'Rejected'),
+#     ('Pending' , 'Pending')
+#     ]
+#     REQUEST_TYPES = [
+#     ('Expenditure', 'Expenditure'),
+#     ('Staff', 'Staff'),
+#     ]
+#     id=models.AutoField(primary_key=True)
+#     pid= models.ForeignKey(projects, on_delete=models.CASCADE)
+#     file_id=models.IntegerField()  
+#     request_type=models.CharField(max_length=50, choices=REQUEST_TYPES)
+#     rid=models.IntegerField()
+#     subject=models.CharField(max_length=300)
+#     requestor=models.CharField(max_length=150)
+#     holder=models.CharField(max_length=150)
+#     approval= models.CharField(max_length=50, choices=APPROVAL_CHOICES) 
 
-    def __str__(self):
-        return f"{self.pid} ({self.request_type}) - {self.rid}"
+#     def __str__(self):
+#         return f"{self.pid} ({self.request_type}) - {self.rid}"
 
-    class Meta:
+#     class Meta:
         ordering = ['-id']
 
 

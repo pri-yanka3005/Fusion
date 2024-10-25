@@ -18,6 +18,7 @@ import datetime
 from django.utils import timezone
 from collections import defaultdict
 from applications.filetracking.sdk.methods import *
+from applications.filetracking.models import *
 
 from rest_framework import status
 from django.views.decorators.csrf import csrf_exempt
@@ -789,8 +790,6 @@ from django.views.decorators.csrf import csrf_exempt
 @api_view(['POST'])
 def create_expenditure(request):
     if request.method == 'POST':
-        serializer = expenditure_serializer(data=request.data)
-
         uploader_designation = request.query_params.get('u_d')
         receiver = request.query_params.get('r')
         receiver_designation = request.query_params.get('r_d')
@@ -799,52 +798,62 @@ def create_expenditure(request):
                 {"Error": "Missing required query parameters."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        if serializer.is_valid():
-            expenditure_instance=serializer.save()
-            try:
-                file_id = create_file(
+        try:
+            file_id = create_file(
                 uploader=request.user.username,
                 uploader_designation=uploader_designation,
                 receiver=receiver,
                 receiver_designation=receiver_designation,
                 subject="New Expenditure Request Created",
-                description=f"Expenditure request has been created for #{expenditure_instance.item}.",
+                description=f"Expenditure request has been created for #{request.data['item']}.",
                 src_module="RSPC",
-                src_object_id=str(expenditure_instance.id),
-                file_extra_JSON={},
+                src_object_id="",
+                file_extra_JSON={
+                    "pid": request.data['pid'],
+                    "request_type": "Expenditure",
+                    "cost": request.data['cost'],
+                    "approval": request.data.get('approval'),
+                    "exptype": request.data['exptype'],
+                    "lastdate": request.data['lastdate'],
+                    "inventory": request.data.get('inventory'),
+                    "desc": request.data.get('desc'),
+                    "mode": request.data['mode']
+                },
                 attached_file=request.FILES.get('file', None)
-                )
-
-                request_data = {
-                'pid': expenditure_instance.pid.pid,  
-                'file_id': file_id, 
-                'request_type': "Expenditure",
-                'rid': expenditure_instance.id,  
-                'subject': expenditure_instance.item, 
-                'requestor': request.user.username,
-                'approval':expenditure_instance.approval,
-                'holder':receiver
-                }
-                request_serializer = requests_serializer(data=request_data)
-            
-                if request_serializer.is_valid():
-                    request_serializer.save()
-                else:
-                    print("Request Serializer Errors:", request_serializer.errors)
-                    return Response(request_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-            except Exception as e:
-                print(f"Failed to create file: {e}")
-                return Response({"Error": "Failed to create file"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            )
+            print(f"File created successfully with ID: {file_id}")
+        except Exception as e:
+            print(f"Failed to create file: {e}")
+            return Response({"Error": "Failed to create file"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        try:
+            expenditure_data = request.data.copy()
+            expenditure_data['file_id'] = file_id
+            serializer = expenditure_serializer(data=expenditure_data)
+            if serializer.is_valid():
+                expenditure_instance=serializer.save()
+                print(f"Expenditure created with ID: {expenditure_instance.id}")
+            else:
+                print("Expenditure Serializer Errors:", serializer.errors)
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"Error creating expenditure: {e}")
+            return Response({"Error": "Failed to create expenditure"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        try:
+            file_instance = File.objects.get(id=file_id)
+            file_instance.src_object_id = str(expenditure_instance.id)
+            file_instance.save()  # Save the updated file instance
+            print(f"File updated with src_object_id: {expenditure_instance.id}")
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        print("Expenditure Serializer Errors:", serializer.errors)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"Failed to update file with src_object_id: {e}")
+            return Response({"Error": "Failed to update file with src_object_id"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     
 @api_view(['POST'])
 def create_staff(request):
-    if request.method == 'POST':
-        serializer = staff_serializer(data=request.data)
-        
+     if request.method == 'POST':
         uploader_designation = request.query_params.get('u_d')
         receiver = request.query_params.get('r')
         receiver_designation = request.query_params.get('r_d')
@@ -853,46 +862,59 @@ def create_staff(request):
                 {"Error": "Missing required query parameters."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        if serializer.is_valid():
-            staff_instance=serializer.save()
-            try:
-                file_id = create_file(
+        try:
+            file_id = create_file(
                 uploader=request.user.username,
                 uploader_designation=uploader_designation,
                 receiver=receiver,
                 receiver_designation=receiver_designation,
                 subject="New Staff Request Created",
-                description=f"Staff request has been created for #{staff_instance.person}.",
+                description=f"Staff request has been created for #{request.data['person']}.",
                 src_module="RSPC",
-                src_object_id=str(staff_instance.id),
-                file_extra_JSON={},
+                src_object_id="",
+                file_extra_JSON={
+                    "pid": request.data['pid'],
+                    "request_type": "Staff",
+                    "stipend": request.data['stipend'],
+                    "approval": request.data.get('approval'),
+                    "qualification": request.data['qualification'],
+                    "designation": request.data['designation'],
+                    "lastdate": request.data['lastdate'],
+                    "startdate": request.data['startdate'],
+                    "uname": request.data.get('uname'),
+                    "desc": request.data.get('desc'),
+                    "dept": request.data['dept']
+                },
                 attached_file=request.FILES.get('file', None)
-                )
+            )
+            print(f"File created successfully with ID: {file_id}")
+        except Exception as e:
+            print(f"Failed to create file: {e}")
+            return Response({"Error": "Failed to create file"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-                request_data = {
-                'pid': staff_instance.pid.pid,  
-                'file_id': file_id, 
-                'request_type': "Staff",
-                'rid': staff_instance.id,  
-                'subject': staff_instance.person, 
-                'requestor': request.user.username,
-                'approval':staff_instance.approval,
-                'holder':receiver
-                }
-                request_serializer = requests_serializer(data=request_data)
-            
-                if request_serializer.is_valid():
-                    request_serializer.save()
-                else:
-                    print("Request Serializer Errors:", request_serializer.errors)
-                    return Response(request_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-            except Exception as e:
-                print(f"Failed to create file: {e}")
-                return Response({"Error": "Failed to create file"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        try:
+            staff_data = request.data.copy()
+            staff_data['file_id'] = file_id
+            serializer = staff_serializer(data=staff_data)
+            if serializer.is_valid():
+                staff_instance=serializer.save()
+                print(f"Staff created with ID: {staff_instance.id}")
+            else:
+                print("Staff Serializer Errors:", serializer.errors)
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"Error creating staff: {e}")
+            return Response({"Error": "Failed to create staff"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        try:
+            file_instance = File.objects.get(id=file_id)
+            file_instance.src_object_id = str(staff_instance.id)
+            file_instance.save()  # Save the updated file instance
+            print(f"File updated with src_object_id: {staff_instance.id}")
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        print("Staff Serializer Errors:", serializer.errors)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"Failed to update file with src_object_id: {e}")
+            return Response({"Error": "Failed to update file with src_object_id"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 @api_view(['POST'])
 def add_project(request):
@@ -922,16 +944,6 @@ def get_projects(request):
     all_projects = projects.objects.all()
     serializer = projects_serializer(all_projects, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
-
-@api_view(['GET'])
-def get_inbox(request):
-    holder = request.GET.get('holder')
-    if holder is not None:
-        inbox = requests.objects.filter(holder=holder)
-        serializer = requests_serializer(inbox, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    else:
-        return Response({"Error": "holder is required"}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 def get_user(request):
@@ -970,6 +982,19 @@ def get_PIDs(request):
         return Response(PIDs, status=status.HTTP_200_OK)
     else:
         return Response({"Error": "lead_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+    
+@api_view(['GET'])
+def get_inbox(request):
+    username = request.GET.get('username')
+    designation=request.GET.get('designation')
+    if username and designation:
+        try:
+            inboxData = view_inbox(username=username, designation=designation, src_module="RSPC")
+            return Response(inboxData, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"Error": f"Failed to retrieve file data: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    else:
+        return Response({"Error": "username and designation is required"}, status=status.HTTP_400_BAD_REQUEST)
     
 @api_view(['GET'])
 def get_file(request):

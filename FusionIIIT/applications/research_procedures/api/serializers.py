@@ -17,10 +17,10 @@ class project_access_serializer(serializers.ModelSerializer):
         model = project_access
         fields = '__all__'
 
-class requests_serializer(serializers.ModelSerializer):
-    class Meta:
-        model = requests
-        fields = '__all__'
+# class requests_serializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = requests
+#         fields = '__all__'
 
 
 # class requests_serializer(serializers.ModelSerializer):
