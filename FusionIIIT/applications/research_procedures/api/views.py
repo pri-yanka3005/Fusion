@@ -19,6 +19,7 @@ from django.utils import timezone
 from collections import defaultdict
 from applications.filetracking.sdk.methods import *
 from applications.filetracking.models import *
+from applications.filetracking.api.serializers import FileHeaderSerializer
 
 from rest_framework import status
 from django.views.decorators.csrf import csrf_exempt
@@ -990,11 +991,28 @@ def get_inbox(request):
     if username and designation:
         try:
             inboxData = view_inbox(username=username, designation=designation, src_module="RSPC")
-            return Response(inboxData, status=status.HTTP_200_OK)
+            finalInbox=[]
+            for file in inboxData:
+                file_id = file.get('id')
+                try:
+                    owner = get_current_file_owner(file_id=file_id)
+                    if owner.username == username:
+                        sender=get_last_file_sender(file_id=file_id)
+                        sender_designation=get_last_file_sender_designation(file_id=file_id)
+                        data = {
+                        "fileData": file,
+                        "sender": sender.username,
+                        "sender_designation": sender_designation.name,
+                        }
+                        finalInbox.append(data)
+                except Exception as e:
+                    return Response({"Error": f"Failed to retrieve file owner: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(finalInbox, status=status.HTTP_200_OK)
         except Exception as e:
+            print("Exception occurred:", str(e))
             return Response({"Error": f"Failed to retrieve file data: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     else:
-        return Response({"Error": "username and designation is required"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"Error": "Username and Designation is required"}, status=status.HTTP_400_BAD_REQUEST)
     
 @api_view(['GET'])
 def get_file(request):
@@ -1002,8 +1020,48 @@ def get_file(request):
     if file_id is not None:
         try:
             fileData = view_file(file_id=file_id)
-            return Response(fileData, status=status.HTTP_200_OK) 
+            return Response(fileData, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"Error": f"Failed to retrieve file data: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     else:
         return Response({"Error": "file_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+    
+@api_view(['GET'])
+def get_history(request):
+    file_id = request.GET.get('file_id') 
+    if file_id is not None:
+        try:
+            historyData = view_history(file_id=file_id)
+            return Response(historyData, status=status.HTTP_200_OK) 
+        except Exception as e:
+            return Response({"Error": f"Failed to retrieve file tracking history: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    else:
+        return Response({"Error": "file_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+    
+@api_view(['POST'])
+def forwarding_file(request):
+    if request.method == 'POST':
+        file_id = request.data.get('file_id')
+        receiver = request.data.get('receiver')
+        receiver_designation = request.data.get('receiver_designation')
+        remarks = request.data.get('remarks')
+        file_extra_JSON = request.data.get('file_extra_JSON', {})
+
+        if not file_id or not receiver or not receiver_designation:
+            return Response(
+                {"Error": "Missing required fields"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            result = forward_file(
+                file_id=int(file_id),
+                receiver=receiver,
+                receiver_designation=receiver_designation,
+                file_extra_JSON=file_extra_JSON,
+                remarks=remarks,
+            )
+            return Response(result, status=status.HTTP_200_OK)
+        except Exception as e:
+            print("Exception occurred:", str(e))
+            return Response({"Error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
