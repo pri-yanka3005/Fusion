@@ -846,8 +846,11 @@ def create_expenditure(request):
         try:
             file_instance = File.objects.get(id=file_id)
             file_instance.src_object_id = str(expenditure_instance.id)
-            file_instance.save()  # Save the updated file instance
-            print(f"File updated with src_object_id: {expenditure_instance.id}")
+            file_instance.save()
+            sender_notif = User.objects.get(username=request.user.username)
+            recipient_notif = User.objects.get(username=receiver)
+            research_procedures_notif(sender=sender_notif, recipient=recipient_notif, type="Processing")
+            print(f"File updated with src_object_id or failed to find user for notifications: {expenditure_instance.id}")
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
             print(f"Failed to update file with src_object_id: {e}")
@@ -914,11 +917,14 @@ def create_staff(request):
         try:
             file_instance = File.objects.get(id=file_id)
             file_instance.src_object_id = str(staff_instance.id)
-            file_instance.save()  # Save the updated file instance
+            file_instance.save()
+            sender_notif = User.objects.get(username=request.user.username)
+            recipient_notif = User.objects.get(username=receiver)
+            research_procedures_notif(sender=sender_notif, recipient=recipient_notif, type="Processing")
             print(f"File updated with src_object_id: {staff_instance.id}")
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
-            print(f"Failed to update file with src_object_id: {e}")
+            print(f"Failed to update file with src_object_id or failed to find user for notifications: {e}")
             return Response({"Error": "Failed to update file with src_object_id"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 @api_view(['POST'])
@@ -935,6 +941,9 @@ def add_project(request):
             access_serializer = project_access_serializer(data=access_data)
             
             if access_serializer.is_valid():
+                sender_notif = User.objects.get(username=request.user.username)
+                recipient_notif = User.objects.get(username=new_project.pi_id)
+                research_procedures_notif(sender=sender_notif, recipient=recipient_notif, type="Created")
                 access_serializer.save()
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             else:
@@ -961,9 +970,9 @@ def get_user(request):
 
 @api_view(['GET'])
 def get_expenditure(request):
-    pid = request.GET.get('pid')  # Extract 'pid' from query parameters
+    pid = request.GET.get('pid')  
     if pid is not None:
-        expenditures = expenditure.objects.filter(pid=pid)  # Filter by pid
+        expenditures = expenditure.objects.filter(pid=pid)  
         serializer = expenditure_serializer(expenditures, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     else:
@@ -971,9 +980,9 @@ def get_expenditure(request):
     
 @api_view(['GET'])
 def get_staff(request):
-    pid = request.GET.get('pid')  # Extract 'pid' from query parameters
+    pid = request.GET.get('pid')  
     if pid is not None:
-        staffs = staff.objects.filter(pid=pid)  # Filter by pid
+        staffs = staff.objects.filter(pid=pid)  
         serializer = staff_serializer(staffs, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     else:
@@ -981,7 +990,7 @@ def get_staff(request):
     
 @api_view(['GET'])
 def get_PIDs(request):
-    lead_id = request.GET.get('lead_id')  # Extract 'pid' from query parameters
+    lead_id = request.GET.get('lead_id')  
     if lead_id is not None:
         PIDs = project_access.objects.filter(lead_id=lead_id).values_list('pid', flat=True)  # Filter by pid
         return Response(PIDs, status=status.HTTP_200_OK)
@@ -1019,6 +1028,22 @@ def get_inbox(request):
         return Response({"Error": "Username and Designation is required"}, status=status.HTTP_400_BAD_REQUEST)
     
 @api_view(['GET'])
+def get_processed(request):
+    username = request.GET.get('username')
+    designation=request.GET.get('designation')
+    if username and designation:
+        try:
+            outboxData = view_outbox(username=username, designation=designation, src_module="RSPC")
+            archivedData = view_archived(username=username, designation=designation, src_module="RSPC")
+            processedData=outboxData+archivedData
+            return Response(processedData, status=status.HTTP_200_OK)
+        except Exception as e:
+            print("Exception occurred:", str(e))
+            return Response({"Error": f"Failed to retrieve file data: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    else:
+        return Response({"Error": "Username and Designation is required"}, status=status.HTTP_400_BAD_REQUEST)
+    
+@api_view(['GET'])
 def get_file(request):
     file_id = request.GET.get('file_id') 
     if file_id is not None:
@@ -1036,7 +1061,13 @@ def get_history(request):
     if file_id is not None:
         try:
             historyData = view_history(file_id=file_id)
-            return Response(historyData, status=status.HTTP_200_OK) 
+            file_instance = File.objects.get(id=file_id)
+            approval = file_instance.file_extra_JSON.get('approval') if file_instance.file_extra_JSON else "Pending"
+            response_data = {
+                "historyData": historyData,
+                "approval": approval
+            }
+            return Response(response_data, status=status.HTTP_200_OK) 
         except Exception as e:
             return Response({"Error": f"Failed to retrieve file tracking history: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     else:
@@ -1049,7 +1080,7 @@ def forwarding_file(request):
         receiver = request.data.get('receiver')
         receiver_designation = request.data.get('receiver_designation')
         remarks = request.data.get('remarks')
-        file_extra_JSON = {"receiver":receiver}
+        tracking_extra_JSON = {"receiver":receiver}
 
         if not file_id or not receiver or not receiver_designation:
             return Response(
@@ -1058,14 +1089,51 @@ def forwarding_file(request):
             )
 
         try:
+            file_instance = File.objects.get(id=file_id)
+            uploader = file_instance.uploader
             result = forward_file(
                 file_id=int(file_id),
                 receiver=receiver,
                 receiver_designation=receiver_designation,
-                file_extra_JSON=file_extra_JSON,
+                file_extra_JSON=tracking_extra_JSON,
                 remarks=remarks,
             )
+            sender_notif = User.objects.get(username=request.user.username)
+            recipient_notif = User.objects.get(username=receiver)
+            uploader_notif=User.objects.get(username=uploader)
+            research_procedures_notif(sender=sender_notif, recipient=recipient_notif, type="Processing")
+            research_procedures_notif(sender=recipient_notif, recipient=uploader_notif, type="Forwarding")
             return Response(result, status=status.HTTP_200_OK)
         except Exception as e:
             print("Exception occurred:", str(e))
             return Response({"Error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+def reject_file(request):
+    file_id = request.GET.get('file_id') 
+    if file_id is not None:
+        try:
+            file_instance = File.objects.get(id=file_id)
+            uploader = file_instance.uploader
+            if file_instance.file_extra_JSON is not None:
+                file_instance.file_extra_JSON['approval'] = "Rejected"
+                file_instance.save()
+                request_instance=None
+                if file_instance.file_extra_JSON['request_type'] == 'Expenditure':
+                    request_instance=expenditure.objects.get(file_id=file_id)
+                else:
+                    request_instance=staff.objects.get(file_id=file_id)
+                if request_instance is not None:
+                    request_instance.approval = "Rejected"
+                    request_instance.save()
+            archive_file(file_id=file_id)
+            sender_notif = User.objects.get(username=request.user.username)
+            recipient_notif = User.objects.get(username=uploader)
+            research_procedures_notif(sender=sender_notif, recipient=recipient_notif, type="Rejected")
+            return Response({"message": "File Rejected Successfully"}, status=status.HTTP_200_OK)
+        except File.DoesNotExist:
+            return Response({"Error": "File not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"Error": f"Failed to reject file: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    else:
+        return Response({"Error": "file_id is required"}, status=status.HTTP_400_BAD_REQUEST)
