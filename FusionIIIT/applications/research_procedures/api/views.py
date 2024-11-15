@@ -818,7 +818,9 @@ def create_expenditure(request):
                     "lastdate": request.data['lastdate'],
                     "inventory": request.data.get('inventory'),
                     "desc": request.data.get('desc'),
-                    "mode": request.data['mode']
+                    "mode": request.data['mode'],
+                    "receiver": receiver,
+                    "tracker heading": f"Expenditure Request For {request.data['item']}",
                 },
                 attached_file=request.FILES.get('file', None)
             )
@@ -884,7 +886,9 @@ def create_staff(request):
                     "startdate": request.data['startdate'],
                     "uname": request.data.get('uname'),
                     "desc": request.data.get('desc'),
-                    "dept": request.data['dept']
+                    "dept": request.data['dept'],
+                    "receiver": receiver,
+                    "tracker heading": f"Staff Request For {request.data['person']}",
                 },
                 attached_file=request.FILES.get('file', None)
             )
@@ -1045,7 +1049,7 @@ def forwarding_file(request):
         receiver = request.data.get('receiver')
         receiver_designation = request.data.get('receiver_designation')
         remarks = request.data.get('remarks')
-        file_extra_JSON = request.data.get('file_extra_JSON', {})
+        file_extra_JSON = {"receiver":receiver}
 
         if not file_id or not receiver or not receiver_designation:
             return Response(
