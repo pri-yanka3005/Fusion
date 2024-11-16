@@ -11,7 +11,7 @@ from applications.research_procedures.models import *
 from applications.globals.models import ExtraInfo, HoldsDesignation, Designation
 from django.core.files.storage import FileSystemStorage
 from django.core.exceptions import ObjectDoesNotExist
-from notification.views import research_procedures_notif
+from notification.views import RSPC_notif
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 import datetime
@@ -849,7 +849,7 @@ def create_expenditure(request):
             file_instance.save()
             sender_notif = User.objects.get(username=request.user.username)
             recipient_notif = User.objects.get(username=receiver)
-            research_procedures_notif(sender=sender_notif, recipient=recipient_notif, type="Processing")
+            RSPC_notif(sender=sender_notif, recipient=recipient_notif, type="Processing")
             print(f"File updated with src_object_id or failed to find user for notifications: {expenditure_instance.id}")
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
@@ -920,7 +920,7 @@ def create_staff(request):
             file_instance.save()
             sender_notif = User.objects.get(username=request.user.username)
             recipient_notif = User.objects.get(username=receiver)
-            research_procedures_notif(sender=sender_notif, recipient=recipient_notif, type="Processing")
+            RSPC_notif(sender=sender_notif, recipient=recipient_notif, type="Processing")
             print(f"File updated with src_object_id: {staff_instance.id}")
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
@@ -943,7 +943,7 @@ def add_project(request):
             if access_serializer.is_valid():
                 sender_notif = User.objects.get(username=request.user.username)
                 recipient_notif = User.objects.get(username=new_project.pi_id)
-                research_procedures_notif(sender=sender_notif, recipient=recipient_notif, type="Created")
+                RSPC_notif(sender=sender_notif, recipient=recipient_notif, type="Created")
                 access_serializer.save()
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             else:
@@ -1101,8 +1101,8 @@ def forwarding_file(request):
             sender_notif = User.objects.get(username=request.user.username)
             recipient_notif = User.objects.get(username=receiver)
             uploader_notif=User.objects.get(username=uploader)
-            research_procedures_notif(sender=sender_notif, recipient=recipient_notif, type="Processing")
-            research_procedures_notif(sender=recipient_notif, recipient=uploader_notif, type="Forwarding")
+            RSPC_notif(sender=sender_notif, recipient=recipient_notif, type="Processing")
+            RSPC_notif(sender=recipient_notif, recipient=uploader_notif, type="Forwarding")
             return Response(result, status=status.HTTP_200_OK)
         except Exception as e:
             print("Exception occurred:", str(e))
@@ -1129,7 +1129,7 @@ def reject_file(request):
             archive_file(file_id=file_id)
             sender_notif = User.objects.get(username=request.user.username)
             recipient_notif = User.objects.get(username=uploader)
-            research_procedures_notif(sender=sender_notif, recipient=recipient_notif, type="Rejected")
+            RSPC_notif(sender=sender_notif, recipient=recipient_notif, type="Rejected")
             return Response({"message": "File Rejected Successfully"}, status=status.HTTP_200_OK)
         except File.DoesNotExist:
             return Response({"Error": "File not found"}, status=status.HTTP_404_NOT_FOUND)
