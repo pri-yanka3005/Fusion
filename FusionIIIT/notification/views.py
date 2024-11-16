@@ -430,7 +430,7 @@ def office_module_DeanRSPC_notif(sender, recipient, type):
     if type == 'Approve':
         verb = "Your Project request has been accepted"
     elif type == 'Disapprove':
-        verb = "Your project request got rejected."
+        verb = "Your project request got rejected ."
     elif type == 'Pending':
         verb = "Kindly wait for the response"
 
@@ -446,15 +446,15 @@ def research_procedures_notif(sender, recipient, type):
     verb = ""
 
     if type == "Approved":
-        verb = "Your request has been approved."
-    elif type == "Rejected":
-        verb = "Your request has been rejected."
-    elif type == "Processing":
-        verb = "You have a new request to process."
-    elif type == "Created":
-        verb = "Your project has been added to RSPC."
-    elif type == "Forwarding":
-        verb = f"Your request has been forwarded to {sender.username}. Kindly wait for decision."
+        verb = "Your Patent has been Approved"
+    elif type == "Disapproved":
+        verb = "Your Patent has been Rejected"
+    elif type == "Pending":
+        verb = "Your Patent has been Pending, wait for the response"
+    elif type == "submitted":
+        verb = "Your Patent has been Submitted, wait for the response"
+    elif type == "created":
+        verb = "A new Patent has been Created"
 
     notify.send(sender=sender,recipient=recipient,url=url,module=module,verb=verb)
 
