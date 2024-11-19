@@ -92,7 +92,7 @@ class expenditure(models.Model):
     mode = models.CharField(max_length=50)
     inventory = models.CharField(max_length=50)
     desc = models.TextField(null=True, blank=True)
-    file = models.FileField(upload_to='uploads/', null=True, blank=True)
+    file = models.FileField( null=True, blank=True)
     approval= models.CharField(max_length=50, choices=APPROVAL_CHOICES)
 
     def clean(self):
@@ -150,7 +150,7 @@ class staff(models.Model):
     startdate = models.DateField(null=True, blank=True)
     lastdate = models.DateField(null=True, blank=True)
     desc = models.TextField(blank=True,  null=True)
-    file = models.FileField(upload_to='staff_profiles/', blank=True, null=True)
+    file = models.FileField( null=True, blank=True)
     approval= models.CharField(max_length=50, choices=APPROVAL_CHOICES) 
 
     def clean(self):
