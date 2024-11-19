@@ -952,6 +952,36 @@ def add_project(request):
         print("Project Serializer Errors:", serializer.errors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+@api_view(['POST'])
+def edit_project(request):
+    if request.method == 'POST':
+        pid = request.POST.get("pid")
+        if pid is not None:
+            try:
+                project_instance = projects.objects.get(pid=pid)
+                updatable_fields=["name", "type", "sponsored_agency", "dept", "deadline", "description", "total_budget", "category"]
+                for field in updatable_fields:
+                    value = request.POST.get(field)
+                    if value:
+                        if field == "total_budget":
+                            value = int(value)
+                            project_instance.total_budget += value
+                            project_instance.rem_budget += value
+                        else:
+                            setattr(project_instance, field, value)
+                if request.FILES.get('file'):
+                    project_instance.file=request.FILES.get('file')
+                project_instance.save()
+                sender_notif = User.objects.get(username=request.user.username)
+                recipient_notif = User.objects.get(username=project_instance.pi_id)
+                RSPC_notif(sender=sender_notif, recipient=recipient_notif, type="Updated")
+                return Response({"message": "Project Details Updated Successfully"}, status=status.HTTP_200_OK)
+            except projects.DoesNotExist:
+                return Response({"Error": "Project not found"}, status=status.HTTP_404_NOT_FOUND)
+            except Exception as e:
+                return Response({"Error": f"Failed to update project details: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            return Response({"Error": "pid is required"}, status=status.HTTP_400_BAD_REQUEST)    
 
 @api_view(['GET'])
 def get_projects(request):
@@ -1090,7 +1120,7 @@ def forwarding_file(request):
 
         try:
             file_instance = File.objects.get(id=file_id)
-            uploader = file_instance.uploader
+            uploader = file_instance.uploader.user
             result = forward_file(
                 file_id=int(file_id),
                 receiver=receiver,
@@ -1114,7 +1144,7 @@ def reject_file(request):
     if file_id is not None:
         try:
             file_instance = File.objects.get(id=file_id)
-            uploader = file_instance.uploader
+            uploader = file_instance.uploader.user
             if file_instance.file_extra_JSON is not None:
                 file_instance.file_extra_JSON['approval'] = "Rejected"
                 file_instance.save()
@@ -1137,3 +1167,93 @@ def reject_file(request):
             return Response({"Error": f"Failed to reject file: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     else:
         return Response({"Error": "file_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+    
+@api_view(['GET'])
+def approve_file(request):
+    file_id = request.GET.get('file_id') 
+    if file_id is not None:
+        try:
+            file_instance = File.objects.get(id=file_id)
+            uploader = file_instance.uploader.user
+            if file_instance.file_extra_JSON is not None:
+                if file_instance.file_extra_JSON['request_type'] == 'Expenditure':
+                    pid=(int)(file_instance.file_extra_JSON['pid'])
+                    cost=(int)(file_instance.file_extra_JSON['cost'])
+                    try:
+                        project_instance = projects.objects.get(pid=pid)
+                    except projects.DoesNotExist:
+                        return Response({"Error": "Project not found"}, status=status.HTTP_404_NOT_FOUND)
+                    remaining_budget=project_instance.rem_budget
+                    if cost > remaining_budget:
+                        return Response({"Error": "Failed to approve file: Expenditure demand is more than the project's remaining budget"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                    else:
+                        project_instance.rem_budget=remaining_budget-cost
+                        project_instance.save()
+                file_instance.file_extra_JSON['approval'] = "Approved"
+                file_instance.save()
+                request_instance=None
+                if file_instance.file_extra_JSON['request_type'] == 'Expenditure':
+                    request_instance=expenditure.objects.get(file_id=file_id)
+                else:
+                    request_instance=staff.objects.get(file_id=file_id)
+                if request_instance is not None:
+                    request_instance.approval = "Approved"
+                    request_instance.save()
+            archive_file(file_id=file_id)
+            sender_notif = User.objects.get(username=request.user.username)
+            recipient_notif = User.objects.get(username=uploader)
+            RSPC_notif(sender=sender_notif, recipient=recipient_notif, type="Approved")
+            return Response({"message": "File Approved Successfully"}, status=status.HTTP_200_OK)
+        except File.DoesNotExist:
+            return Response({"Error": "File not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"Error": f"Failed to approve file: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    else:
+        return Response({"Error": "file_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+    
+@api_view(['POST'])
+def end_project(request):
+    if request.method == 'POST':
+        pid = request.data.get('pid')
+        receiver = request.query_params.get('r')
+        if pid is not None:
+            try:
+                project_instance = projects.objects.get(pid=pid)
+                project_instance.finish_date=request.data.get('enddate')
+                project_instance.end_report=request.FILES.get('file', None)
+                if(request.user.username == receiver):
+                    project_instance.status = "Terminated"
+                    sender_notif = User.objects.get(username=request.user.username)
+                    recipient_notif = User.objects.get(username=project_instance.pi_id)
+                    RSPC_notif(sender=sender_notif, recipient=recipient_notif, type="Over")
+                else:
+                    sender_notif = User.objects.get(username=request.user.username)
+                    recipient_notif = User.objects.get(username=receiver)
+                    RSPC_notif(sender=sender_notif, recipient=recipient_notif, type="Completed")
+                project_instance.save()
+                return Response({"message": "Project Ending Successful"}, status=status.HTTP_200_OK)
+            except projects.DoesNotExist:
+                return Response({"Error": "Project not found"}, status=status.HTTP_404_NOT_FOUND)
+            except Exception as e:
+                return Response({"Error": f"Failed to complete project: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            return Response({"Error": "pid is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+@api_view(['GET'])
+def accept_completion(request):
+    pid = request.GET.get('pid') 
+    if pid is not None:
+        try:
+            project_instance = projects.objects.get(pid=pid)
+            project_instance.status = "Completed"
+            project_instance.save()
+            sender_notif = User.objects.get(username=request.user.username)
+            recipient_notif = User.objects.get(username=project_instance.pi_id)
+            RSPC_notif(sender=sender_notif, recipient=recipient_notif, type="Over")
+            return Response({"message": "Project Ending Successful"}, status=status.HTTP_200_OK)
+        except projects.DoesNotExist:
+            return Response({"Error": "Project not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"Error": f"Failed to complete project: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    else:
+        return Response({"Error": "pid is required"}, status=status.HTTP_400_BAD_REQUEST)

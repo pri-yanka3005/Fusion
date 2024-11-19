@@ -58,6 +58,7 @@ class projects(models.Model):
     finish_date=models.DateField(null=True, blank=True)
     status= models.CharField(max_length=50, choices=STATUS_CHOICES)
     file=models.FileField( null=True, blank=True)
+    end_report=models.FileField( null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     total_budget=models.IntegerField(default=0)
     rem_budget=models.IntegerField(default=0)
