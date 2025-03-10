@@ -15,12 +15,12 @@ from notification.views import RSPC_notif
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 import datetime
+import json
 from django.utils import timezone
 from collections import defaultdict
 from applications.filetracking.sdk.methods import *
 from applications.filetracking.models import *
 from applications.filetracking.api.serializers import FileHeaderSerializer
-
 from rest_framework import status
 from django.views.decorators.csrf import csrf_exempt
 # # # Faculty can file patent and view status of it.
@@ -926,29 +926,64 @@ def create_staff(request):
         except Exception as e:
             print(f"Failed to update file with src_object_id or failed to find user for notifications: {e}")
             return Response({"Error": "Failed to update file with src_object_id"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+
+def create_budget(pid, budget_data, overhead):
+    parsed_budget = {
+        "pid": pid, 
+        "manpower": [year["manpower"] for year in budget_data],
+        "travel": [year["travel"] for year in budget_data],
+        "contingency": [year["contingency"] for year in budget_data],
+        "consumables": [year["consumables"] for year in budget_data],
+        "equipments": [year["equipments"] for year in budget_data],
+        "overhead": overhead
+    }
+    serializer = budget_serializer(data=parsed_budget)
+    if serializer.is_valid():
+        serializer.save()
+    else:
+        print("Budget Serializer Errors:", serializer.errors)
+        raise ValueError(serializer.errors)
+
+def create_copis(pid, coPIs_data, sender_username):
+     for copi in coPIs_data:
+        copi["pid"] = pid
+        serializer = project_access_serializer(data=copi)
+        if serializer.is_valid():
+            if(copi["type"]=="Internal"):
+                sender_notif = User.objects.get(username=sender_username)
+                recipient_notif = User.objects.get(username=copi["copi_id"])
+                RSPC_notif(sender=sender_notif, recipient=recipient_notif, type="Created")
+            serializer.save()
+        else:
+            print("Co-PIs Serializer Errors:", serializer.errors)
+            raise ValueError(serializer.errors)
+
 @api_view(['POST'])
 def add_project(request):
     if request.method == 'POST':
-        serializer = projects_serializer(data=request.data)
+        data=request.data.copy()
+        budget_data = json.loads(data.pop('budget', [''])[0])
+        coPIs_data = json.loads(data.pop('coPIs', [''])[0])
+        overhead = data.pop('overhead', ['0'])[0]
+
+        pi = User.objects.get(username=data["pi_id"])
+        pi_name = f"{pi.first_name} {pi.last_name}"
+        data["pi_name"] = pi_name
+        serializer = projects_serializer(data=data)
         
         if serializer.is_valid():
             new_project=serializer.save()
-            access_data = {
-                'lead_id': new_project.pi_id,  # pi_id from projects
-                'pid': new_project.pid         # pid from projects (ForeignKey)
-            }
-            access_serializer = project_access_serializer(data=access_data)
+            try:
+                create_budget(new_project.pid, budget_data, overhead)
+                create_copis(new_project.pid, coPIs_data, request.user.username)
+            except ValueError as e:
+                new_project.delete()
+                return Response({"Error": f"Failed in adding CoPIs or Budget - {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
             
-            if access_serializer.is_valid():
-                sender_notif = User.objects.get(username=request.user.username)
-                recipient_notif = User.objects.get(username=new_project.pi_id)
-                RSPC_notif(sender=sender_notif, recipient=recipient_notif, type="Created")
-                access_serializer.save()
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            else:
-                print("Access Serializer Errors:", access_serializer.errors)
-                return Response(access_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            sender_notif = User.objects.get(username=request.user.username)
+            recipient_notif = User.objects.get(username=new_project.pi_id)
+            RSPC_notif(sender=sender_notif, recipient=recipient_notif, type="Created")
+            return Response(serializer.data, status=status.HTTP_201_CREATED)      
         print("Project Serializer Errors:", serializer.errors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -979,7 +1014,7 @@ def edit_project(request):
             except projects.DoesNotExist:
                 return Response({"Error": "Project not found"}, status=status.HTTP_404_NOT_FOUND)
             except Exception as e:
-                return Response({"Error": f"Failed to update project details: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({"Error": f"Failed to update project details - {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         else:
             return Response({"Error": "pid is required"}, status=status.HTTP_400_BAD_REQUEST)    
 

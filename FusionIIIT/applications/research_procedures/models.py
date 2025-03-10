@@ -2,6 +2,7 @@ from django.db import models
 from django.db import models
 from applications.globals.models import *
 from django.contrib.auth.models import User
+from django.contrib.postgres.fields import ArrayField
 import datetime
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
@@ -16,9 +17,13 @@ class Constants:
 
 
 class projects(models.Model): 
+    ACCESS_SPECIFIERS = (
+        ('Co', 'Only PI'),
+        ('noCo', 'Either PI or Co-PI(s)'),
+    )   
+    
     PROJECT_TYPES = (
         ('Research', 'Research'),
-        ('Product', 'Product'),
         ('Consultancy', 'Consultancy'),
     )   
 
@@ -31,7 +36,7 @@ class projects(models.Model):
 
     STATUS_CHOICES = (
         ('OnGoing', 'OnGoing'),
-        ('Terminated', 'Terminated'),
+        ('Submitted', 'Submitted'),
         ('Completed', 'Completed'),
     )      
 
@@ -48,28 +53,41 @@ class projects(models.Model):
 
     pid = models.AutoField(primary_key=True)
     name= models.CharField(max_length=600)
-    type= models.CharField(max_length=50, choices=PROJECT_TYPES)
-    pi_name=models.CharField(max_length=150)
     pi_id=models.CharField(max_length=150)
-    sponsored_agency= models.CharField(max_length=500)
+    pi_name=models.CharField(max_length=150)
+    access = models.CharField(max_length=10, choices=ACCESS_SPECIFIERS)
+    type= models.CharField(max_length=50, choices=PROJECT_TYPES)
     dept=models.CharField(max_length=50, choices=DEPT_CHOICES)
-    start_date=models.DateField()
-    deadline=models.DateField()
-    finish_date=models.DateField(null=True, blank=True)
-    status= models.CharField(max_length=50, choices=STATUS_CHOICES)
-    file=models.FileField( null=True, blank=True)
-    end_report=models.FileField( null=True, blank=True)
+    category=models.CharField(max_length=50, choices=CATEGORY_CHOICES)
+    sponsored_agency= models.CharField(max_length=500)
+    scheme = models.CharField(max_length=300, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
+    duration = models.IntegerField()
+    submission_date = models.DateField()
     total_budget=models.IntegerField(default=0)
     rem_budget=models.IntegerField(default=0)
-    category=models.CharField(max_length=50, choices=CATEGORY_CHOICES)
-    
+    start_date=models.DateField(null=True, blank=True)
+    initial_amount = models.IntegerField(default=0)
+    file=models.FileField( null=True, blank=True)
+    status= models.CharField(max_length=50, choices=STATUS_CHOICES)
+    end_report=models.FileField( null=True, blank=True)
 
     def __str__(self):
-        return str(self.pid)
-
+        return f"{self.name} ({self.pid})"
     class Meta:
         ordering = ['-pid']
+
+class budget(models.Model):
+    pid = models.OneToOneField(projects, on_delete=models.CASCADE, related_name="budgets")
+    manpower = ArrayField(models.IntegerField(), default=list)       # Year-wise manpower
+    travel = ArrayField(models.IntegerField(), default=list)         # Year-wise travel
+    contingency = ArrayField(models.IntegerField(), default=list)    # Year-wise contingency
+    consumables = ArrayField(models.IntegerField(), default=list)    # Year-wise consumables
+    equipments = ArrayField(models.IntegerField(), default=list) 
+    overhead = models.IntegerField(default=0)
+
+    def __str__(self):
+        return f"Budget Year {self.year} for {self.pid.name}"
 
 
 class expenditure(models.Model):
@@ -193,15 +211,16 @@ class staff(models.Model):
 
     
 class project_access(models.Model):
-    id=models.AutoField(primary_key=True)
-    lead_id= models.CharField(max_length=150)
-    pid= models.ForeignKey(projects, on_delete=models.CASCADE)
+    aid=models.AutoField(primary_key=True)
+    pid= models.ForeignKey(projects, on_delete=models.CASCADE, related_name="co_pis")
+    type = models.CharField(max_length=10)
+    copi_id = models.CharField(max_length=150)
+    affiliation = models.CharField(max_length=300, blank=True, null=True)
 
     def __str__(self):
-        return str(self.lead_id)
-    
+        return f"Co-PI for {self.pid.name}"  
     class Meta:
-        ordering = ['-lead_id']
+        ordering = ['-pid']
     
     
     

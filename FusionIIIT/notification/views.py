@@ -458,6 +458,32 @@ def research_procedures_notif(sender, recipient, type):
 
     notify.send(sender=sender,recipient=recipient,url=url,module=module,verb=verb)
 
+def RSPC_notif(sender, recipient, type):
+    url = 'rspc'
+    module = 'RSPC'
+    sender = sender
+    recipient = recipient
+    verb = ""
+ 
+    if type == "Approved":
+        verb = f"Your request has been approved by {sender.username}."
+    elif type == "Rejected":
+        verb = f"Your request has been rejected by {sender.username}."
+    elif type == "Processing":
+        verb = "You have a new request to process."
+    elif type == "Created":
+        verb = "Your project has been added to RSPC."
+    elif type == "Updated":
+        verb = "Your project's details have been updated by RSPC."
+    elif type == "Forwarding":
+        verb = f"Your request has been forwarded to {sender.username}. Kindly wait for decision."
+    elif type == "Completed":
+        verb = f"You have a new project completion request to process."
+    elif type == "Over":
+        verb = "Your project has been marked as finished by RSPC"
+ 
+    notify.send(sender=sender,recipient=recipient,url=url,module=module,verb=verb)
+
 def hostel_notifications(sender, recipient, type):
     url = 'hostelmanagement:hostel_view'
     module = 'Hostel Management'
